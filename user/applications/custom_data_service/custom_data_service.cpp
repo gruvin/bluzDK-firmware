@@ -1,24 +1,33 @@
 #include "application.h"
 SYSTEM_MODE(MANUAL);
-bool sendResponse = false;
-void dataCallbackHandler(uint8_t *data, uint16_t length) {
-    digitalWrite(D7, HIGH);
-    sendResponse = true;
 
+int timeLastPublish = 0;
+int timeBetweenPublishes = 300000;
+bool sendData = false;
+
+void dataCallbackHandler(uint8_t *data, uint16_t length) {
+    sendData = true;
 }
 
 void setup() {
     pinMode(D7, OUTPUT);
     BLE.registerDataCallback(dataCallbackHandler);
+
+    pinMode(D6, INPUT_PULLDOWN);
+    if (digitalRead(D6) == HIGH) {
+        SYSTEM_MODE(AUTOMATIC);
+    }
 }
 
 void loop() {
     System.sleep(SLEEP_MODE_CPU);
-    if (sendResponse) {
+    if (sendData)
+    {
         uint8_t rsp[2];
-        rsp[0] = 0xAA;
-        rsp[1] = 0xBB;
+        rsp[0] = 'H';
+        rsp[1] = 'i';
         BLE.sendData(rsp, 2);
-        sendResponse = false;
+        timeLastPublish = millis();
+        sendData = false;
     }
 }

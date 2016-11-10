@@ -33,8 +33,15 @@
 
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
 
+#if PLATFORM_ID==103
 #define APP_TIMER_MAX_TIMERS            11                                          /**< Maximum number of simultaneously created timers. */
 #define APP_TIMER_OP_QUEUE_SIZE         12                                          /**< Size of timer operation queues. */
+#endif
+#if PLATFORM_ID==269
+#define APP_TIMER_MAX_TIMERS            2                                          /**< Maximum number of simultaneously created timers. */
+#define APP_TIMER_OP_QUEUE_SIZE         4                                          /**< Size of timer operation queues. */
+#endif
+
 
 #define TIME_KEPPER_MILLISECONDS     	100                                         /**< Keep track of time in roughly 100 mSecond intervals. */
 #define TIME_KEPPER_INTERVAL     		APP_TIMER_TICKS(TIME_KEPPER_MILLISECONDS, APP_TIMER_PRESCALER)     /**< Convert to clock ticks. */
@@ -52,9 +59,8 @@
 #define SCHED_MAX_EVENT_DATA_SIZE       MAX(APP_TIMER_SCHED_EVT_SIZE, BLE_STACK_HANDLER_SCHED_EVT_SIZE)                   /**< Maximum size of scheduler events. Note that scheduler BLE stack events do not contain any data, as the events are being pulled from the stack in the event handler. */
 #define SCHED_QUEUE_SIZE                10                                          /**< Maximum number of events in the scheduler queue. */
 
-#define DEVICE_NAME                     "Bluz DK"	                            	/**< Name of device. Will be included in the advertising data. */
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)            /**< Minimum acceptable connection interval (0.5 seconds). */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(40, UNIT_1_25_MS)           /**< Maximum acceptable connection interval (1 second). */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(300, UNIT_1_25_MS)           /**< Maximum acceptable connection interval (1 second). */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds). */
 
@@ -69,6 +75,25 @@
 #define SEC_PARAM_OOB                   0                                           /**< Out Of Band data not available. */
 #define SEC_PARAM_MIN_KEY_SIZE          7                                           /**< Minimum encryption key size. */
 #define SEC_PARAM_MAX_KEY_SIZE          16                                          /**< Maximum encryption key size. */
+
+#define BEACON_ADV_INTERVAL    			MSEC_TO_UNITS(950, UNIT_0_625_MS) /**< The advertising interval for non-connectable advertisement (100 ms). This value can vary between 100ms to 10.24s). */
+#define APP_BEACON_INFO_LENGTH          0x17                              /**< Total length of information advertised by the Beacon. */
+#define APP_ADV_DATA_LENGTH             0x15                              /**< Length of manufacturer specific data in the advertisement. */
+#define APP_DEVICE_TYPE                 0x02                              /**< 0x02 refers to Beacon. */
+#define APP_MEASURED_RSSI               0xC4                              /**< The Beacon's measured RSSI at 1 meter distance in dBm. */
+#define APP_COMPANY_IDENTIFIER          0x004C                            /**< Company identifier for Nordic Semiconductor ASA. as per www.bluetooth.org. */
+#define APP_MAJOR_VALUE                 0x11, 0x22                        /**< Major value used to identify Beacons. */
+#define APP_MINOR_VALUE                 0x33, 0x44                        /**< Minor value used to identify Beacons. */
+
+#define EDDYSTONE_BEACON_LENGTH 0x18
+
+#define EDDYSTONE_HEADER 0x02, 0x01, 0x06, 0x03, 0x03, 0xAA, 0xFE, 0x10, 0x16, 0xAA, 0xFE
+#define EDDYSTONE_FRAME_TYPE 0x10
+#define EDDYSTONE_TX_POWER 0xEB
+#define EDDYSTONE_URL_SCHEME 0x02
+#define EDDYSTONE_URL 0x6d, 0x63, 0x6f, 0x6e, 0x74, 0x69, 0x2e, 0x78, 0x79, 0x7a
+
+
 
 //timers
 app_timer_id_t millis_timer;
@@ -85,6 +110,7 @@ scs_t m_scs;
 uint16_t m_conn_handle; /**< Handle of the current connection. */
 
 //system variables
+uint32_t system_seconds;
 uint32_t system_milliseconds;
 uint32_t system_microseconds;
 uint32_t system_connection_interval;

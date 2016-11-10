@@ -26,7 +26,11 @@
 
 //Info Command Request
 typedef enum {
-    GET_ID
+    GET_ID=0,
+    SET_MODE,
+    SET_CONNECTION_PARAMETERS,
+    POLL_CONNECTIONS,
+    CONNECTION_RESULTS
 } INFO_COMMAND;
 
 
@@ -38,6 +42,7 @@ public:
     //DataService functions
     virtual int32_t getServiceID();
     virtual int32_t DataCallback(uint8_t *data, int16_t length);
+    void registerCallback(void (*ec)(uint8_t event, uint8_t *data, uint16_t length));
     
 private:
     //this is a singleton class, so these all need to be private so they can't be called
@@ -45,8 +50,17 @@ private:
     InfoDataService(InfoDataService const&){};
     InfoDataService& operator=(InfoDataService const&);
     static InfoDataService* m_pInstance;
+    void (*event_callback)(uint8_t event, uint8_t *data, uint16_t length);
 };
 
-#endif
-#endif	/* _INFO_DATA_SERVICE_H */
+#endif  /*  __cplusplus */
 
+#ifdef __cplusplus
+extern "C" {
+#endif  /*  __cplusplus */
+void infoDataServiceRegisterCallback(void (*event_callback)(uint8_t event, uint8_t *data, uint16_t length));
+#ifdef __cplusplus
+}
+#endif
+
+#endif	/* _INFO_DATA_SERVICE_H */

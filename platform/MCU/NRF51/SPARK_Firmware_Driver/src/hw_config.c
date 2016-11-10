@@ -31,9 +31,11 @@
 #include "ble_conn_params.h"
 #include "ble_hci.h"
 #include "custom_data_service.h"
+#include "info_data_service.h"
 #include "nrf_drv_wdt.h"
 #include "client_handling.h"
 #include "app_timer.h"
+#include "spi_master_fast.h"
 
 uint32_t NbrOfPage = 0;
 uint16_t Flash_Update_Index = 0;
@@ -49,6 +51,16 @@ static void blink_led(int count)
         nrf_delay_us(250000);
     }
     nrf_delay_us(500000);
+}
+
+void tick_system_seconds(void)
+{
+    system_seconds++;
+}
+
+uint32_t get_system_seconds(void)
+{
+    return system_seconds;
 }
 
 uint32_t system_millis(void)
@@ -76,15 +88,9 @@ void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p
     DEBUG("Error happened on line number %d in file %s", line_num, p_file_name);
     LED_SetRGBColor(RGB_COLOR_RED);
 
-    for (int i=1; i<APP_TIMER_MAX_TIMERS; i++) app_timer_stop(i);
-
-    for (int i = 0; i < error_code; i++) {
-        nrf_gpio_pin_set(0);
-        nrf_delay_us(250000);
-        nrf_gpio_pin_clear(0);
-        nrf_delay_us(250000);
-    }
-    nrf_delay_us(500000);
+    nrf_drv_wdt_channel_feed(m_channel_id);
+    //this will stop all timers, so we need to feed the WDT here
+    for (int i=0; i<APP_TIMER_MAX_TIMERS; i++) app_timer_stop(i);
 
     nrf_gpio_pin_set(0);
     for (int count = 0; count < 2; count++) {
@@ -94,6 +100,7 @@ void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p
             nrf_delay_ms(100);
             LED_Off(LED_RGB);
             nrf_delay_ms(100);
+            nrf_drv_wdt_channel_feed(m_channel_id);
         }
         nrf_delay_ms(250);
         for (int i = 0; i < 3; i++) {
@@ -101,6 +108,7 @@ void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p
             nrf_delay_ms(250);
             LED_Off(LED_RGB);
             nrf_delay_ms(250);
+            nrf_drv_wdt_channel_feed(m_channel_id);
         }
         nrf_delay_ms(250);
         for (int i = 0; i < 3; i++) {
@@ -108,6 +116,7 @@ void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p
             nrf_delay_ms(100);
             LED_Off(LED_RGB);
             nrf_delay_ms(100);
+            nrf_drv_wdt_channel_feed(m_channel_id);
         }
         nrf_delay_ms(1000);
         for (int i = 0; i < error_code; i++) {
@@ -115,8 +124,10 @@ void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p
             nrf_delay_ms(250);
             LED_Off(LED_RGB);
             nrf_delay_ms(250);
+            nrf_drv_wdt_channel_feed(m_channel_id);
         }
-        nrf_delay_ms(3000);
+        nrf_delay_ms(2000);
+        nrf_drv_wdt_channel_feed(m_channel_id);
     }
     
     
@@ -129,7 +140,7 @@ uint32_t OTA_FlashAddress()
     return FLASH_FW_ADDRESS;
 }
 
-#define FLASH_MAX_SIZE          (int32_t)(FLASH_LENGTH - FLASH_FW_ADDRESS)
+#define FLASH_MAX_SIZE          (int32_t)(FLASH_STORAGE_ADDRESS - FLASH_FW_ADDRESS)
 
 uint32_t OTA_FlashLength()
 {
@@ -303,6 +314,11 @@ void buttons_init(void)
 
 void external_flash_init(void)
 {
+    // issue #35: starting with v2.0.50 we swapped which TWI/SPI instance the user app uses from 1 to 0. however, the bootloader
+    // still uses the original (1) instance, meaning that when the system firmware starts, the wrong SPI instance is enabled. so,
+    // we need to disable the incorrect version before we go any further
+    spi_master_disable(SPI1);
+
     sFLASH_Init();
 }
 
@@ -382,6 +398,19 @@ void device_manager_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+char* DEVICE_NAME = "Bluz DK";
+void set_advertised_name(char* name)
+{
+    DEVICE_NAME = name;
+
+    //if we are already advertising, reset to the new name
+    if (state == BLE_ADVERTISING) {
+        advertising_stop();
+        gap_params_init();
+        advertising_start();
+    }
+}
+
 /**@brief Function for the GAP initialization.
  *
  * @details This function sets up all the necessary GAP (Generic Access Profile) parameters of the
@@ -394,7 +423,7 @@ void gap_params_init(void)
     ble_gap_conn_sec_mode_t sec_mode;
     
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
-    
+
     err_code = sd_ble_gap_device_name_set(&sec_mode,
                                           (const uint8_t *)DEVICE_NAME,
                                           strlen(DEVICE_NAME));
@@ -453,9 +482,35 @@ void register_data_callback(void (*data_callback)(uint8_t *data, uint16_t length
     customDataServiceRegisterCallback(data_callback);
 }
 
+void register_event_callback(void (*event_callback)(uint8_t event, uint8_t *data, uint16_t length))
+{
+    infoDataServiceRegisterCallback(event_callback);
+}
+
 void send_data(uint8_t *data, uint16_t length)
 {
     customDataServiceSendData(data, length);
+}
+
+void setTxPower(int power)
+{
+    sd_ble_gap_tx_power_set(power);
+}
+
+void setConnParameters(int minimum, int maximum)
+{
+    ble_disconnect();
+    int err_code;
+    ble_gap_conn_params_t   gap_conn_params;
+    memset(&gap_conn_params, 0, sizeof(gap_conn_params));
+
+    gap_conn_params.min_conn_interval = MSEC_TO_UNITS(minimum, UNIT_1_25_MS);
+    gap_conn_params.max_conn_interval = MSEC_TO_UNITS(maximum, UNIT_1_25_MS);
+    gap_conn_params.slave_latency     = SLAVE_LATENCY;
+    gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
+
+    err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
+    APP_ERROR_CHECK(err_code);
 }
 
 /**@brief Function for initializing the BLE stack.
@@ -522,6 +577,81 @@ void advertising_init(void)
     err_code = ble_advdata_set(&advdata, &scanrsp);
     APP_ERROR_CHECK(err_code);
 }
+
+//uint8_t APP_BEACON_UUID[16] = {0};
+//void advertising_init_beacon(uint32_t major, uint32_t minor, uint8_t *UUID)
+//{
+//    uint8_t m_beacon_info[APP_BEACON_INFO_LENGTH];
+//
+//    m_beacon_info[0] = (uint8_t)APP_DEVICE_TYPE; // Manufacturer specific information. Specifies the device type in this implementation.
+//    m_beacon_info[1] = (uint8_t)APP_ADV_DATA_LENGTH; // Manufacturer specific information. Specifies the length of the manufacturer specific data in this implementation.
+//    memcpy(m_beacon_info + 2, UUID, 16);
+//    m_beacon_info[18] = (uint8_t)(major >> 8);
+//    m_beacon_info[19] = (uint8_t)(major);
+//    m_beacon_info[20] = (uint8_t)(minor >> 8);
+//    m_beacon_info[21] = (uint8_t)(minor);
+//    m_beacon_info[22] = APP_MEASURED_RSSI;
+//
+//    uint32_t      err_code;
+//    ble_advdata_t advdata;
+//    ble_advdata_t scanrsp;
+//    uint8_t       flags = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
+//
+//    ble_advdata_manuf_data_t manuf_specific_data;
+//
+//    manuf_specific_data.company_identifier = APP_COMPANY_IDENTIFIER;
+//
+//    manuf_specific_data.data.p_data = (uint8_t *) m_beacon_info;
+//    manuf_specific_data.data.size   = APP_BEACON_INFO_LENGTH;
+//
+//    // Build and set advertising data.
+//    memset(&advdata, 0, sizeof(advdata));
+//
+//    advdata.name_type             = BLE_ADVDATA_NO_NAME;
+//    advdata.flags.size            = sizeof(flags);
+//    advdata.flags.p_data          = &flags;
+//    advdata.p_manuf_specific_data = &manuf_specific_data;
+//
+//    ble_uuid_t adv_uuids[] = {{BLE_SCS_UUID_SERVICE, m_scs.uuid_type}};
+//
+//    memset(&scanrsp, 0, sizeof(scanrsp));
+//    scanrsp.uuids_complete.uuid_cnt = sizeof(adv_uuids) / sizeof(adv_uuids[0]);
+//    scanrsp.uuids_complete.p_uuids  = adv_uuids;
+//    scanrsp.name_type = BLE_ADVDATA_FULL_NAME;
+//
+//    err_code = ble_advdata_set(&advdata, &scanrsp);
+//    APP_ERROR_CHECK(err_code);
+//
+//    // Initialize advertising parameters (used when starting advertising).
+//    memset(&m_adv_params, 0, sizeof(m_adv_params));
+//
+//    m_adv_params.type        = BLE_GAP_ADV_TYPE_ADV_IND;
+//    m_adv_params.p_peer_addr = NULL;                             // Undirected advertisement.
+//    m_adv_params.fp          = BLE_GAP_ADV_FP_ANY;
+//    m_adv_params.interval    = BEACON_ADV_INTERVAL;
+//}
+//
+//static void advertising_init_eddystone()
+//{
+//    uint8_t m_beacon_info[URL_BEACON_LENGTH] =                  /**< Information advertised by the Beacon. */
+//    {
+//            EDDYSTONE_HEADER,
+//            EDDYSTONE_FRAME_TYPE,
+//            EDDYSTONE_TX_POWER,
+//            EDDYSTONE_URL_SCHEME,
+//            EDDYSTONE_URL
+//    };
+//    sd_ble_gap_adv_data_set(m_beacon_info, URL_BEACON_LENGTH, NULL, 0);
+//
+//    // Initialize advertising parameters (used when starting advertising).
+//    memset(&m_adv_params, 0, sizeof(m_adv_params));
+//
+//    m_adv_params.type        = BLE_GAP_ADV_TYPE_ADV_IND;
+//    m_adv_params.p_peer_addr = NULL;                             // Undirected advertisement.
+//    m_adv_params.fp          = BLE_GAP_ADV_FP_ANY;
+//    m_adv_params.interval    = BEACON_ADV_INTERVAL;
+//    m_adv_params.timeout     = APP_CFG_NON_CONN_ADV_TIMEOUT;
+//}
 
 //Startup Functions
 
@@ -593,6 +723,14 @@ void power_manage(void)
 //    APP_ERROR_CHECK(err_code);
 }
 
+void shutdown(void)
+{
+    nrf_drv_wdt_channel_feed(m_channel_id);
+    //this will stop all timers, so we need to feed the WDT here
+    for (int i=0; i<APP_TIMER_MAX_TIMERS; i++) app_timer_stop(i);
+    LED_Off(LED_RGB);
+    sd_power_system_off();
+}
 
 void FLASH_WriteProtection_Enable(uint32_t FLASH_Sectors)
 {

@@ -37,6 +37,7 @@ uint8_t dataInBuffer[32];
 uint8_t dataInBufferSize = 0, dataInBufferStart = 0;
 
 uint8_t dataAddress;
+bool wireConfigured = false;
 
 void twi_event_handler(nrf_drv_twi_evt_t *p_event);
 
@@ -46,18 +47,24 @@ void HAL_I2C_Init(HAL_I2C_Interface i2c, void* reserved)
 
 void HAL_I2C_Begin(HAL_I2C_Interface i2c, I2C_Mode mode, uint8_t address, void* reserved)
 {
-    p_twi_config.scl = TWI1_CONFIG_SCL;
-    p_twi_config.sda = TWI1_CONFIG_SDA;
-    int ret_code = nrf_drv_twi_init(&p_twi_instance, &p_twi_config, NULL); // Initiate twi driver with instance and configuration values
-    APP_ERROR_CHECK(ret_code); // Check for errors in return value
     HW_ONE_CONFIG = HW1_TWI;
-    nrf_drv_twi_enable(&p_twi_instance); // Enable the TWI instance
+    if (!wireConfigured) {
+        p_twi_config.scl = TWI1_CONFIG_SCL;
+        p_twi_config.sda = TWI1_CONFIG_SDA;
+        int ret_code = nrf_drv_twi_init(&p_twi_instance, &p_twi_config,
+                                        NULL); // Initiate twi driver with instance and configuration values
+        APP_ERROR_CHECK(ret_code); // Check for errors in return value
+        nrf_drv_twi_enable(&p_twi_instance); // Enable the TWI instance
+        wireConfigured = true;
+    }
+
 }
 
 void HAL_I2C_End(HAL_I2C_Interface i2c, void* reserved)
 {
     nrf_drv_twi_disable(&p_twi_instance); // Disable the TWI instance
     nrf_drv_twi_uninit(&p_twi_instance); // Uninit the TWI instance
+    wireConfigured = false;
 }
 
 void HAL_I2C_Set_Speed(HAL_I2C_Interface i2c, uint32_t speed, void* reserved)
@@ -112,12 +119,13 @@ int32_t HAL_I2C_Available_Data(HAL_I2C_Interface i2c,void* reserved)
 
 int32_t HAL_I2C_Read_Data(HAL_I2C_Interface i2c,void* reserved)
 {
+    dataInBufferSize--;
     return dataInBuffer[dataInBufferStart++];
 }
 
 int32_t HAL_I2C_Peek_Data(HAL_I2C_Interface i2c,void* reserved)
 {
-    return dataInBuffer[dataInBufferSize];
+    return dataInBuffer[dataInBufferStart];
 }
 
 void HAL_I2C_Flush_Data(HAL_I2C_Interface i2c,void* reserved)
@@ -127,7 +135,8 @@ void HAL_I2C_Flush_Data(HAL_I2C_Interface i2c,void* reserved)
 
 bool HAL_I2C_Is_Enabled(HAL_I2C_Interface i2c,void* reserved)
 {
-    return NRF_TWI1->ENABLE;
+    // NRF_TWI1->ENABLE is a shared resource with SPI1, so we need to make sure the user configured this peripheral
+    return HW_ONE_CONFIG == HW1_TWI && NRF_TWI1->ENABLE;
 }
 
 void HAL_I2C_Set_Callback_On_Receive(HAL_I2C_Interface i2c, void (*function)(int),void* reserved)

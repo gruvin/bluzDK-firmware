@@ -55,6 +55,7 @@
 volatile uint16_t ledOffTime = 2000, ledOnTime = 200;
 static volatile uint32_t TimingLED;
 static volatile uint32_t TimingIWDGReload;
+static volatile uint32_t SystemSecondsTick;
 static bool CLOUD_CONNECTED = false;
 uint32_t on_mseconds = ledOnTime, off_mseconds = ledOnTime+ledOffTime;
 uint16_t cloudErrors = 0;
@@ -88,6 +89,18 @@ extern "C" void HAL_SysTick_Handler(void) {
         TimingIWDGReload+=HAL_Get_Sys_Tick_Interval();
     }
 
+    //tick the system seconds (separate from millis() so it won't roll over after 49 days)
+    if (SystemSecondsTick >= 1000)
+    {
+        SystemSecondsTick = 0;
+        /* Reload WDG counter */
+        HAL_Tick_System_Seconds();
+    }
+    else
+    {
+        SystemSecondsTick+=HAL_Get_Sys_Tick_Interval();
+    }
+
     //check on system updates and reset if necessary
     if(SPARK_FLASH_UPDATE)
     {
@@ -118,6 +131,17 @@ void system_part1_post_init()
 {
 }
 
+void platform_event_callback(uint8_t event, uint8_t *data, uint16_t length)
+{
+    //set mode function
+    if (event == 1) {
+        if (length == 1 && data[0] == 1) {
+            set_system_mode(MANUAL);
+        } else {
+            set_system_mode(AUTOMATIC);
+        }
+    }
+}
 
 /*******************************************************************************
  * Function Name  : main.
@@ -129,6 +153,9 @@ void system_part1_post_init()
 void app_setup_and_loop_passive(void)
 {
     system_part1_post_init();
+
+    // Register for events that may come from the platform
+    HAL_Register_Platform_Events(platform_event_callback);
     
     //Set some Particle flags to bypass functionality we don't need
     SPARK_CLOUD_SOCKETED = 0;
@@ -188,6 +215,7 @@ void app_setup_and_loop_passive(void)
                         }
                     }
                 } else {
+                    LED_SetRGBColor(system_mode()==SAFE_MODE ? RGB_COLOR_YELLOW : RGB_COLOR_GREEN);
                     ledOffTime = 250;
                     HAL_Delay_Milliseconds(2000);
                     DEBUG("Calling Spark Connect");
@@ -201,9 +229,9 @@ void app_setup_and_loop_passive(void)
                     DEBUG("Calling Spark Handshake");
                     err_code = Spark_Handshake(false);
                     if (err_code) {
-                        LED_SetRGBColor(RGB_COLOR_MAGENTA);
                         ERROR("Error when calling Spark Handshake");
                         SPARK_CLOUD_SOCKETED = 0;
+                        ledOffTime = 2000;
                         HAL_Handle_Cloud_Disconnect();
                     } else {
                         LED_SetRGBColor(system_mode()==SAFE_MODE ? RGB_COLOR_YELLOW : RGB_COLOR_CYAN);

@@ -35,18 +35,18 @@
 
 #define INFO_DATA_SERVICE_BUF_SIZE  8
 
+#define MAX_TARGET_LENGTH 24
+
 #define MIN_CONNECTION_INTERVAL          MSEC_TO_UNITS(7.5, UNIT_1_25_MS)                /**< Determines minimum connection interval in millisecond. */
 #define MAX_CONNECTION_INTERVAL          MSEC_TO_UNITS(30, UNIT_1_25_MS)                /**< Determines maximum connection interval in millisecond. */
 #define SLAVE_LATENCY                    0                                              /**< Determines slave latency in counts of connection events. */
 #define SUPERVISION_TIMEOUT              MSEC_TO_UNITS(4000, UNIT_10_MS)                /**< Determines supervision time-out in units of 10 millisecond. */
 
-#define TARGET_DEV_NAME                  "Bluz DK"                                      /**< Target device name that application is looking for. */
-
 #define SCAN_INTERVAL                    0x00A0                                         /**< Determines scan interval in units of 0.625 millisecond. */
 #define SCAN_WINDOW                      0x0050                                         /**< Determines scan window in units of 0.625 millisecond. */
 
-uint8_t                           m_peer_count;                    /**< Number of peer's connected. */
-bool                              m_memory_access_in_progress;     /**< Flag to keep track of ongoing operations on persistent memory. */
+extern uint8_t                           m_peer_count;                    /**< Number of peer's connected. */
+extern bool                              m_memory_access_in_progress;     /**< Flag to keep track of ongoing operations on persistent memory. */
 
 #define GATEWAY_NOTIFICATION_LED         0
 
@@ -55,11 +55,6 @@ bool                              m_memory_access_in_progress;     /**< Flag to 
 
 #define TIME_BETWEEN_CONNECTIONS        15000
 #define CONNECTION_FAILURE_TIMEOUT      30
-uint32_t lastConnectionTime;
-uint32_t lastConnectionErrorTime;
-uint8_t connectionErrors;
-
-bool gatewayHardwareConnected;
 
 /**@brief Gateway Protocol states. */
 typedef enum
@@ -92,13 +87,8 @@ static const ble_gap_scan_params_t m_scan_param =
 /**
  * @brief Connection parameters requested for connection.
  */
-static const ble_gap_conn_params_t m_connection_param =
-{
-    (uint16_t)MIN_CONNECTION_INTERVAL,   // Minimum connection
-    (uint16_t)MAX_CONNECTION_INTERVAL,   // Maximum connection
-    0,                                   // Slave latency
-    (uint16_t)SUPERVISION_TIMEOUT        // Supervision time-out
-};
+
+ble_gap_conn_params_t get_gw_conn_params(void);
 
 //Gateway Init Functions
 void ble_gateway_stack_init(void);
@@ -106,22 +96,17 @@ void gateway_init(void);
 void gateway_scan_start(void);
 void gateway_loop(void);
 
+void setGatewayConnParameters(int minimum, int maximum);
+
 void gateway_cancel_connect_and_start_scanning(void);
+
+void set_gateway_target_name(char* name);
+char* get_gateway_target_name();
 
 //Gateway Callback Functions
 #if PLATFORM_ID==269
-uint8_t spi_slave_tx_buffer[SPI_SLAVE_TX_BUF_SIZE];
-volatile uint16_t spi_slave_tx_buffer_size;
-volatile uint16_t spi_slave_tx_buffer_start;
 void spi_slave_tx_data(uint8_t* tx_buffer, uint16_t size);
-
-uint8_t spi_slave_rx_buffer[SPI_SLAVE_RX_BUF_SIZE];
-volatile uint16_t spi_slave_rx_buffer_size;
-volatile uint16_t spi_slave_rx_buffer_start;
 void spi_slave_rx_data(uint8_t *rx_buffer, uint16_t size);
-
-uint8_t info_data_service_buffer_size;
-uint8_t info_data_service_buffer[INFO_DATA_SERVICE_BUF_SIZE];
 #endif
 
 uint32_t adv_report_parse(uint8_t type, data_t * p_advdata, data_t * p_typedata);

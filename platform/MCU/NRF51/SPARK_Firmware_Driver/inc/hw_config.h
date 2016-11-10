@@ -39,6 +39,7 @@ typedef enum {
     BLE_OFF,
     BLE_ADVERTISING,
     BLE_SLEEPING,
+    BLE_GAP_CONNECTED,
     BLE_CONNECTED,
     BLE_SCANNING,
 } BLE_STATE;
@@ -73,7 +74,10 @@ uint32_t timers_stop(void);
 
 int register_radio_callback(void (*radio_callback)(bool radio_active));
 void register_data_callback(void (*data_callback)(uint8_t *data, uint16_t length));
+void register_event_callback(void (*event_callback)(uint8_t event, uint8_t *data, uint16_t length));
 void send_data(uint8_t *data, uint16_t length);
+void setTxPower(int power);
+void setConnParameters(int minimum, int maximum);
 
 //Data Services Functions
 void data_service_init(void);
@@ -81,14 +85,18 @@ void data_service_init(void);
 //event handling
 void power_manage(void);
 void app_sched_execute(void);
+void shutdown(void);
 
 //useful functions
 void blinkLED(int times);
 void heartBeat(void);
+void tick_system_seconds(void);
+uint32_t get_system_seconds(void);
 uint32_t system_millis(void);
 uint32_t system_micros(void);
 void set_cloud_connection_state(bool connected);
 void wtd_feed(void);
+void set_advertised_name(char* name);
 
 //Flash functions
 uint16_t FLASH_GetDeviceInt(void);

@@ -58,3 +58,17 @@ void BLEClass::sendData(uint8_t *data, uint16_t length)
     HAL_BLE_Send_Data(data, length);
 }
 
+void BLEClass::setTxPower(int power)
+{
+    HAL_BLE_Set_TX_Power(power);
+}
+
+void BLEClass::setConnectionParameters(int minimum, int maximum)
+{
+    HAL_BLE_Set_CONN_PARAMS(minimum, maximum);
+}
+
+void BLEClass::setGatewayTargetName(char* name)
+{
+    HAL_BLE_Set_Gateway_Target(name);
+}

@@ -71,6 +71,11 @@ void HAL_Set_Cloud_Connection(bool connected)
     set_cloud_connection_state(connected);
 }
 
+void HAL_Register_Platform_Events(void (*event_callback)(uint8_t event, uint8_t *data, uint16_t length))
+{
+
+}
+
 void HAL_Events_Manage(void)
 {
 }
@@ -109,6 +114,7 @@ void HAL_Core_Mode_Button_Reset(void)
 
 void HAL_Core_System_Reset(void)
 {
+    NVIC_SystemReset();
 }
 
 void HAL_Core_Factory_Reset(void)
@@ -129,8 +135,7 @@ void HAL_Core_Execute_Stop_Mode(void)
 
 void HAL_Core_Enter_Standby_Mode(void)
 {
-    power_manage();
-    app_sched_execute();
+    shutdown();
 }
 
 void HAL_Core_CPU_Sleep(void)
@@ -150,6 +155,16 @@ void HAL_Core_Enter_Safe_Mode(void* reserved)
 uint32_t HAL_Get_Sys_Tick_Interval(void)
 {
     return TIME_KEPPER_MILLISECONDS;
+}
+
+void HAL_Tick_System_Seconds(void)
+{
+    return tick_system_seconds();
+}
+
+uint32_t HAL_Get_System_Seconds(void)
+{
+    return get_system_seconds();
 }
 /**
  * @brief  Computes the 32-bit CRC of a given buffer of byte data.

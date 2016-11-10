@@ -26,6 +26,7 @@ enum BLEState {
     BLE_OFF,
     BLE_ADVERTISING,
     BLE_SLEEPING,
+    BLE_GAP_CONNECTED,
     BLE_CONNECTED,
 };
 
@@ -34,6 +35,9 @@ private:
 
 public:
     BLEClass(void) {};
+    BLEClass(char* name) {
+        HAL_BLE_Set_Adv_Name(name);
+    };
     
     static BLEState getState();
     
@@ -55,10 +59,20 @@ public:
 
     //function to send data
     static void sendData(uint8_t *data, uint16_t length);
-    
+
+    //function to set TX power
+    static void setTxPower(int power);
+
+    //function to set the connection paramaters
+    static void setConnectionParameters(int minimum, int maximum);
+
+    //function to set the target name for the gateway to connect to
+    static void setGatewayTargetName(char* name);
     
 };
 
 extern BLEClass BLE;
+
+#define BLE_ADV_NAME(name)  BLEClass AdvName(name);
 
 #endif  // __SPARK_WIRING_BLUETOOTH_LE_H

@@ -31,6 +31,32 @@
 
 #include "debug.h"
 
+//global variables
+uint8_t m_peer_count = 0;
+bool m_memory_access_in_progress = false;
+
+//connection parameters
+ble_gap_conn_params_t m_connection_param;
+
+//Buffers needed for callbacks from SPI and BLE events, this is where data passes through
+uint8_t spi_slave_tx_buffer[SPI_SLAVE_TX_BUF_SIZE];
+volatile uint16_t spi_slave_tx_buffer_size;
+volatile uint16_t spi_slave_tx_buffer_start;
+
+
+uint8_t spi_slave_rx_buffer[SPI_SLAVE_RX_BUF_SIZE];
+volatile uint16_t spi_slave_rx_buffer_size;
+volatile uint16_t spi_slave_rx_buffer_start;
+
+uint8_t info_data_service_buffer_size;
+uint8_t info_data_service_buffer[INFO_DATA_SERVICE_BUF_SIZE];
+
+//variables for keeping track
+uint32_t lastConnectionErrorTime;
+uint8_t connectionErrors;
+
+char TARGET_DEV_NAME[MAX_TARGET_LENGTH];
+
 /**@brief Function for initializing the BLE stack.
  *
  * @details Initializes the SoftDevice and the BLE event interrupt.
@@ -71,9 +97,17 @@ void gateway_notify_disconnect_all(void) {
 //HW Init Functions
 void gateway_init(void)
 {
+    char* target_name = "Bluz DK";
+    memcpy(TARGET_DEV_NAME, target_name, strlen(target_name));
+
+    memset(&m_connection_param, 0, sizeof(m_connection_param));
+    m_connection_param.min_conn_interval = (uint16_t)MIN_CONNECTION_INTERVAL;
+    m_connection_param.max_conn_interval = (uint16_t)MAX_CONNECTION_INTERVAL;
+    m_connection_param.slave_latency = 0;
+    m_connection_param.conn_sup_timeout = (uint16_t)SUPERVISION_TIMEOUT;
+
     lastConnectionErrorTime = 0;
     connectionErrors = 0;
-    lastConnectionTime = 0;
     m_peer_count = 0;
     m_memory_access_in_progress = false;
     spi_slave_tx_buffer_size = 0;
@@ -227,4 +261,29 @@ uint32_t adv_report_parse(uint8_t type, data_t * p_advdata, data_t * p_typedata)
         index += field_length+1;
     }
     return NRF_ERROR_NOT_FOUND;
+}
+
+void setGatewayConnParameters(int minimum, int maximum)
+{
+    disconnect_all_peripherals();
+    m_connection_param.min_conn_interval = MSEC_TO_UNITS(minimum, UNIT_1_25_MS);
+    m_connection_param.max_conn_interval = MSEC_TO_UNITS(maximum, UNIT_1_25_MS);
+}
+
+ble_gap_conn_params_t get_gw_conn_params(void)
+{
+    return m_connection_param;
+}
+
+void set_gateway_target_name(char* name)
+{
+    disconnect_all_peripherals();
+    if (strlen(name) < MAX_TARGET_LENGTH) {
+        memcpy(TARGET_DEV_NAME, name, strlen(name));
+    }
+}
+
+char* get_gateway_target_name()
+{
+    return TARGET_DEV_NAME;
 }

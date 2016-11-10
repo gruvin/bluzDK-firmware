@@ -23,17 +23,23 @@
 #include "pstorage.h"
 #include "hw_gateway_config.h"
 #include "client_handling.h"
+#include "ble.h"
+#include "ble_srv_common.h"
+
+
+//variables
+uint32_t lastConnectionTime = 0;
 
 void uart_error_handle(app_uart_evt_t * p_event)
 {
-    if (p_event->evt_type == APP_UART_COMMUNICATION_ERROR)
-    {
-        APP_ERROR_HANDLER(p_event->data.error_communication);
-    }
-    else if (p_event->evt_type == APP_UART_FIFO_ERROR)
-    {
-        APP_ERROR_HANDLER(p_event->data.error_code);
-    }
+//    if (p_event->evt_type == APP_UART_COMMUNICATION_ERROR)
+//    {
+//        APP_ERROR_HANDLER(p_event->data.error_communication);
+//    }
+//    else if (p_event->evt_type == APP_UART_FIFO_ERROR)
+//    {
+//        APP_ERROR_HANDLER(p_event->data.error_code);
+//    }
 }
 
 /**@brief Function for handling a Connection Parameters error.
@@ -114,7 +120,15 @@ void on_ble_evt(ble_evt_t * p_ble_evt)
             
             system_connection_interval = p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params.max_conn_interval;
 
-            state = BLE_CONNECTED;
+            state = BLE_GAP_CONNECTED;
+            break;
+
+        case BLE_GATTS_EVT_WRITE:
+            if (p_ble_evt->evt.gatts_evt.params.write.len == 2 && p_ble_evt->evt.gatts_evt.params.write.op == BLE_GATT_OP_WRITE_REQ
+            && p_ble_evt->evt.gatts_evt.params.write.data[0] == BLE_GATT_HVX_NOTIFICATION) {
+                //this is the notification we have been waiting for!
+                state = BLE_CONNECTED;
+            }
             break;
             
         case BLE_GAP_EVT_DISCONNECTED:
@@ -178,9 +192,10 @@ void on_ble_evt(ble_evt_t * p_ble_evt)
             //                                                  &type_data);
             
             // Verify if short or complete name matches target.
+            char* target = get_gateway_target_name();
             if ((err_code == NRF_SUCCESS) &&
-                (0 == memcmp(TARGET_DEV_NAME,type_data.p_data,type_data.data_len)) &&
-                isCloudConnected &&
+                (0 == memcmp(target,type_data.p_data,type_data.data_len)) &&
+//                isCloudConnected &&
                 !isCloudUpdating &&
                 system_millis() - lastConnectionTime > TIME_BETWEEN_CONNECTIONS)
             {
@@ -190,11 +205,12 @@ void on_ble_evt(ble_evt_t * p_ble_evt)
                 {
                 }
 
+                ble_gap_conn_params_t connection_param = get_gw_conn_params();
                 lastConnectionTime = system_millis();
                 err_code = sd_ble_gap_connect(&p_ble_evt->evt.gap_evt.params.adv_report.\
                                               peer_addr,
                                               &m_scan_param,
-                                              &m_connection_param);
+                                              &connection_param);
                 
                 if (err_code != NRF_SUCCESS)
                 {
